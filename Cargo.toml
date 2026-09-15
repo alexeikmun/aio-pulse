@@ -1,0 +1,15 @@
+[package]
+name = "aio-pulse"
+version = "0.1.0"
+edition = "2024"
+default-run = "aio-pulse"
+
+[dependencies]
+hidapi = "2.6.7"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Direct2D", "Win32_Graphics_DirectWrite", "Win32_Graphics_Gdi", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_System_LibraryLoader", "Win32_Graphics_Direct2D_Common", "Win32_Graphics_Dxgi_Common", "Foundation_Numerics", "Win32_Graphics_Dwm", "Win32_Devices_Usb", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_IO"] }
+windows-numerics = "0.3.1"
