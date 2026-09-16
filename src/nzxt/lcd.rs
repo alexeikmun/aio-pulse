@@ -435,39 +435,39 @@ impl LcdFramebuffer {
 
         // 5. Unit symbols (e.g. "%" or "°C")
         if unit == "%" {
-            self.draw_char('%', bar_x + bar_w - 7, cpu_y - 12, 1, 255, 255, 255);
-            self.draw_char('%', bar_x + bar_w - 7, gpu_y + bar_h + 20, 1, 255, 255, 255);
+            self.draw_char('%', bar_x + bar_w - 7, cpu_y - 10, 1, 255, 255, 255);
+            self.draw_char('%', bar_x + bar_w - 7, gpu_y + bar_h + 25, 1, 255, 255, 255);
 
             let cpu_str = format!("{:.0}", top_val.clamp(0.0, 100.0));
-            let num_x = bar_x + bar_w - 12 - (cpu_str.len() as u32 * 18);
+            let num_x = bar_x + bar_w - 12 - (cpu_str.len() as u32 * 24);
             for (i, ch) in cpu_str.chars().enumerate() {
-                self.draw_char(ch, num_x + (i as u32 * 18), cpu_y - 30, 3, 255, 255, 255);
+                self.draw_char(ch, num_x + (i as u32 * 24), cpu_y - 32, 4, 255, 255, 255);
             }
 
             let gpu_str = format!("{:.0}", bot_val.clamp(0.0, 100.0));
-            let num_gx = bar_x + bar_w - 12 - (gpu_str.len() as u32 * 18);
+            let num_gx = bar_x + bar_w - 12 - (gpu_str.len() as u32 * 24);
             for (i, ch) in gpu_str.chars().enumerate() {
-                self.draw_char(ch, num_gx + (i as u32 * 18), gpu_y + bar_h + 5, 3, 255, 255, 255);
+                self.draw_char(ch, num_gx + (i as u32 * 24), gpu_y + bar_h + 4, 4, 255, 255, 255);
             }
         } else {
             // "°C"
             let unit_w = (unit.chars().count() as u32) * 6;
             let unit_x = bar_x + bar_w - unit_w;
             for (i, ch) in unit.chars().enumerate() {
-                self.draw_char(ch, unit_x + (i as u32 * 6), cpu_y - 12, 1, 255, 255, 255);
-                self.draw_char(ch, unit_x + (i as u32 * 6), gpu_y + bar_h + 20, 1, 255, 255, 255);
+                self.draw_char(ch, unit_x + (i as u32 * 6), cpu_y - 10, 1, 255, 255, 255);
+                self.draw_char(ch, unit_x + (i as u32 * 6), gpu_y + bar_h + 25, 1, 255, 255, 255);
             }
 
             let cpu_str = format!("{:.0}", top_val.clamp(0.0, 100.0));
-            let num_x = unit_x - 5 - (cpu_str.len() as u32 * 18);
+            let num_x = unit_x - 5 - (cpu_str.len() as u32 * 24);
             for (i, ch) in cpu_str.chars().enumerate() {
-                self.draw_char(ch, num_x + (i as u32 * 18), cpu_y - 30, 3, 255, 255, 255);
+                self.draw_char(ch, num_x + (i as u32 * 24), cpu_y - 32, 4, 255, 255, 255);
             }
 
             let gpu_str = format!("{:.0}", bot_val.clamp(0.0, 100.0));
-            let num_gx = unit_x - 5 - (gpu_str.len() as u32 * 18);
+            let num_gx = unit_x - 5 - (gpu_str.len() as u32 * 24);
             for (i, ch) in gpu_str.chars().enumerate() {
-                self.draw_char(ch, num_gx + (i as u32 * 18), gpu_y + bar_h + 5, 3, 255, 255, 255);
+                self.draw_char(ch, num_gx + (i as u32 * 24), gpu_y + bar_h + 4, 4, 255, 255, 255);
             }
         }
     }
@@ -505,6 +505,7 @@ pub struct KrakenLcd {
     file_handle: Option<HANDLE>,
     hid_device: Option<hidapi::HidDevice>,
     initialized: bool,
+    last_connect_attempt: Option<Instant>,
 }
 
 impl KrakenLcd {
@@ -516,6 +517,7 @@ impl KrakenLcd {
             file_handle: None,
             hid_device: None,
             initialized: false,
+            last_connect_attempt: None,
         }
     }
 
@@ -529,6 +531,7 @@ impl KrakenLcd {
 
     pub fn connect(&mut self) -> Result<(), LcdError> {
         info!("Connecting to Kraken 360 LCD hardware...");
+        self.hid_device = None;
 
         // 1. Open HID device for control transfers
         if let Ok(api) = hidapi::HidApi::new() {
@@ -574,8 +577,12 @@ impl KrakenLcd {
                         return Err(LcdError::Hardware("WinUsb_Initialize failed".into()));
                     }
                 }
-                _ => {
-                    return Err(LcdError::Hardware("Could not open WinUSB device handle".into()));
+                Err(err) => {
+                    return Err(LcdError::Hardware(format!("Could not open WinUSB device handle: {}", err)));
+                }
+                Ok(h) => {
+                    let _ = CloseHandle(h);
+                    return Err(LcdError::Hardware("Invalid device handle".into()));
                 }
             }
         }
@@ -649,7 +656,13 @@ impl Display for KrakenLcd {
         }
 
         if self.winusb.is_none() {
-            let _ = self.connect();
+            let should_retry = self
+                .last_connect_attempt
+                .map_or(true, |t| t.elapsed() >= std::time::Duration::from_secs(5));
+            if should_retry {
+                self.last_connect_attempt = Some(std::time::Instant::now());
+                let _ = self.connect();
+            }
         }
 
         // Convert RGBA -> RGB565

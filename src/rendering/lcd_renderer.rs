@@ -164,27 +164,27 @@ impl LcdRenderer {
             label_bot_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)?;
             label_bot_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR)?;
 
-            // 3. Top metric format (Large bold, Right/Bottom aligned)
+            // 3. Top metric format (Large bold, Right/Bottom aligned to hug upper bar)
             let top_metric_format = dwrite_factory.CreateTextFormat(
                 w!("Segoe UI"),
                 None,
                 DWRITE_FONT_WEIGHT_BOLD,
                 DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL,
-                52.0,
+                62.0,
                 w!("en-US"),
             )?;
             top_metric_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING)?;
             top_metric_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_FAR)?;
 
-            // 4. Bottom metric format (Large bold, Right/Top aligned)
+            // 4. Bottom metric format (Large bold, Right/Top aligned to hug lower bar)
             let bot_metric_format = dwrite_factory.CreateTextFormat(
                 w!("Segoe UI"),
                 None,
                 DWRITE_FONT_WEIGHT_BOLD,
                 DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL,
-                52.0,
+                62.0,
                 w!("en-US"),
             )?;
             bot_metric_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING)?;
@@ -197,20 +197,20 @@ impl LcdRenderer {
                 DWRITE_FONT_WEIGHT_BOLD,
                 DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL,
-                14.0,
+                18.0,
                 w!("en-US"),
             )?;
             top_pct_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING)?;
             top_pct_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_FAR)?;
 
-            // 6. Bottom "%" format (Small bold, Right/Far aligned to match baseline of large number)
+            // 6. Bottom "%" format (Small bold, Right/Bottom aligned to match baseline of large number)
             let bot_pct_format = dwrite_factory.CreateTextFormat(
                 w!("Segoe UI"),
                 None,
                 DWRITE_FONT_WEIGHT_BOLD,
                 DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL,
-                14.0,
+                18.0,
                 w!("en-US"),
             )?;
             bot_pct_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING)?;
@@ -325,13 +325,13 @@ impl LcdRenderer {
             };
             rt.FillRoundedRectangle(&gpu_bar_rounded, &brushes.bar_track_brush);
 
-            // 3. Static "CPU" label
+            // 3. Static "CPU" label (snug above upper bar)
             let cpu_label_utf16: Vec<u16> = "CPU".encode_utf16().collect();
             let cpu_label_rect = D2D_RECT_F {
-                left: 100.0,
-                top: 128.0,
-                right: 150.0,
-                bottom: 144.0,
+                left: 98.0,
+                top: 125.0,
+                right: 145.0,
+                bottom: 146.0,
             };
             rt.DrawText(
                 &cpu_label_utf16,
@@ -342,13 +342,13 @@ impl LcdRenderer {
                 DWRITE_MEASURING_MODE_NATURAL,
             );
 
-            // 4. Static "GPU" label
+            // 4. Static "GPU" label (snug below lower bar)
             let gpu_label_utf16: Vec<u16> = "GPU".encode_utf16().collect();
             let gpu_label_rect = D2D_RECT_F {
-                left: 100.0,
-                top: 187.5,
-                right: 150.0,
-                bottom: 203.5,
+                left: 98.0,
+                top: 184.0,
+                right: 145.0,
+                bottom: 202.0,
             };
             rt.DrawText(
                 &gpu_label_utf16,
@@ -359,13 +359,15 @@ impl LcdRenderer {
                 DWRITE_MEASURING_MODE_NATURAL,
             );
 
-            // 5. Static top unit symbol (e.g. "%" or "°C")
+            let unit_left = if unit == "%" { 217.0 } else { 205.0 };
+
+            // 5. Static top unit symbol (e.g. "%" or "°C") aligned to baseline of top number
             let unit_utf16: Vec<u16> = unit.encode_utf16().collect();
             let top_unit_rect = D2D_RECT_F {
-                left: 195.0,
-                top: 128.0,
-                right: 231.0,
-                bottom: 144.0,
+                left: unit_left,
+                top: 110.0,
+                right: 232.0,
+                bottom: 150.5,
             };
             rt.DrawText(
                 &unit_utf16,
@@ -376,12 +378,12 @@ impl LcdRenderer {
                 DWRITE_MEASURING_MODE_NATURAL,
             );
 
-            // 6. Static bottom unit symbol (e.g. "%" or "°C")
+            // 6. Static bottom unit symbol (e.g. "%" or "°C") aligned to baseline of bottom number
             let bot_unit_rect = D2D_RECT_F {
-                left: 195.0,
-                top: 216.0,
-                right: 231.0,
-                bottom: 232.0,
+                left: unit_left,
+                top: 175.0,
+                right: 232.0,
+                bottom: 228.0,
             };
             rt.DrawText(
                 &unit_utf16,
@@ -472,16 +474,16 @@ impl LcdRenderer {
                 rt.PopAxisAlignedClip();
             }
 
-            let metric_right = if unit == "%" { 218.0 } else { 206.0 };
+            let metric_right = if unit == "%" { 217.0 } else { 205.0 };
 
-            // 3. Dynamic top usage/temperature value
+            // 3. Dynamic top usage/temperature value (snug above upper bar)
             let cpu_str = format!("{:.0}", top_val.max(0.0).round());
             let cpu_utf16: Vec<u16> = cpu_str.encode_utf16().collect();
             let cpu_val_rect = D2D_RECT_F {
-                left: 90.0,
-                top: 85.0,
+                left: 80.0,
+                top: 80.0,
                 right: metric_right,
-                bottom: 144.0,
+                bottom: 161.0,
             };
             rt.DrawText(
                 &cpu_utf16,
@@ -492,14 +494,14 @@ impl LcdRenderer {
                 DWRITE_MEASURING_MODE_NATURAL,
             );
 
-            // 4. Dynamic bottom usage/temperature value
+            // 4. Dynamic bottom usage/temperature value (snug below lower bar)
             let gpu_str = format!("{:.0}", bot_val.max(0.0).round());
             let gpu_utf16: Vec<u16> = gpu_str.encode_utf16().collect();
             let gpu_val_rect = D2D_RECT_F {
-                left: 90.0,
-                top: 187.5,
+                left: 80.0,
+                top: 163.0,
                 right: metric_right,
-                bottom: 246.0,
+                bottom: 237.0,
             };
             rt.DrawText(
                 &gpu_utf16,

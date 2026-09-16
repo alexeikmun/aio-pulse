@@ -38,6 +38,7 @@ pub struct SensorState {
     pub gpu_usage: f32,
     pub gpu_vram_mb: f32,
     pub ram_usage: f32,
+    pub update_count: u64,
 }
 
 impl Default for SensorState {
@@ -51,6 +52,7 @@ impl Default for SensorState {
             gpu_usage: 62.0,
             gpu_vram_mb: 6144.0,
             ram_usage: 44.0,
+            update_count: 0,
         }
     }
 }

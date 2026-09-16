@@ -73,7 +73,7 @@ impl Application {
                 .expect("Failed to spawn hardware worker thread");
         }
 
-        // 2. Monitoring Sensors Thread (2-second monitoring interval)
+        // 2. Monitoring Sensors Thread (1-second monitoring interval)
         {
             let state_clone = Arc::clone(&self.state);
             let running_clone = Arc::clone(&self.running);
@@ -81,7 +81,7 @@ impl Application {
             thread::Builder::new()
                 .name("AIPulse-Monitoring".into())
                 .spawn(move || {
-                    info!("System monitoring worker thread started.");
+                    info!("System monitoring worker thread started (1-second interval).");
                     let mut cpu_mon = CpuMonitor::new();
                     let mut gpu_mon = GpuMonitor::new();
                     let mut mem_mon = MemoryMonitor::new();
@@ -92,14 +92,9 @@ impl Application {
                         }
                     }
 
+                    let mut next_poll = Instant::now();
                     while running_clone.load(Ordering::Relaxed) {
-                        let poll_interval = {
-                            if let Ok(state) = state_clone.read() {
-                                Duration::from_millis(state.config.polling_interval_ms.max(100))
-                            } else {
-                                Duration::from_millis(1000)
-                            }
-                        };
+                        next_poll += Duration::from_secs(1);
 
                         let cpu_sensors = cpu_mon.poll_sensors();
                         let gpu_sensors = gpu_mon.poll_sensors();
@@ -129,16 +124,28 @@ impl Application {
                                     state.sensors.ram_usage = s.value as f32;
                                 }
                             }
+                            state.sensors.update_count = state.sensors.update_count.wrapping_add(1);
                         }
 
-                        thread::sleep(poll_interval);
+                        // Also notify main window to refresh telemetry cards immediately
+                        unsafe {
+                            let h = HWND(hwnd_raw as *mut _);
+                            let _ = PostMessageW(Some(h), WM_APP_UPDATE, WPARAM(0), LPARAM(0));
+                        }
+
+                        let now = Instant::now();
+                        if next_poll > now {
+                            thread::sleep(next_poll - now);
+                        } else {
+                            next_poll = now;
+                        }
                     }
                     info!("System monitoring worker thread exiting.");
                 })
                 .expect("Failed to spawn monitoring worker thread");
         }
 
-        // 3. LCD Rendering Worker Thread (5-second infographic rotation cycle)
+        // 3. LCD Rendering Worker Thread (5-second infographic rotation cycle, 1-second value updates)
         {
             let state_clone = Arc::clone(&self.state);
             let running_clone = Arc::clone(&self.running);
@@ -146,7 +153,7 @@ impl Application {
             thread::Builder::new()
                 .name("AIPulse-LCD".into())
                 .spawn(move || {
-                    info!("LCD worker thread started (5-second rotation cycle, Direct2D pipeline).");
+                    info!("LCD worker thread started (5-second rotation cycle, 1-second value updates, Direct2D pipeline).");
                     let width = 240;
                     let height = 240;
                     let mut kraken_lcd = KrakenLcd::new(width, height);
@@ -162,19 +169,18 @@ impl Application {
                     let mut rotation_mgr = InfographicRotationManager::new(InfographicType::CpuGpuLoad);
                     let mut last_sensor_render_time = Instant::now() - Duration::from_secs(10);
                     let mut last_rendered_infographic = rotation_mgr.current();
+                    let mut last_rendered_sensor_count = 0u64;
+                    let sensor_refresh_interval = Duration::from_secs(1);
 
                     while running_clone.load(Ordering::Relaxed) {
                         let now = Instant::now();
 
-                        // 1. Read configured sensor refresh interval and sync external active_infographic
-                        let (refresh_interval, current_from_state) = {
+                        // 1. Sync external active_infographic and sensor update version
+                        let (current_from_state, current_sensor_count) = {
                             if let Ok(state) = state_clone.read() {
-                                (
-                                    Duration::from_millis(state.config.polling_interval_ms.max(100)),
-                                    state.lcd.active_infographic,
-                                )
+                                (state.lcd.active_infographic, state.sensors.update_count)
                             } else {
-                                (Duration::from_millis(1000), rotation_mgr.current())
+                                (rotation_mgr.current(), last_rendered_sensor_count)
                             }
                         };
 
@@ -189,11 +195,13 @@ impl Application {
 
                         // 3. Check if re-render is needed:
                         // - Infographic switched (5s boundary)
-                        // - Configured sensor refresh interval elapsed within active infographic
-                        let sensor_refresh_due = now.duration_since(last_sensor_render_time) >= refresh_interval;
+                        // - New sensor telemetry sampled (every 1 second)
+                        // - 1-second fallback sensor refresh interval elapsed
+                        let new_sensor_data = current_sensor_count != last_rendered_sensor_count;
+                        let sensor_refresh_due = now.duration_since(last_sensor_render_time) >= sensor_refresh_interval;
                         let infographic_changed = active_infographic != last_rendered_infographic;
 
-                        if rotated || infographic_changed || sensor_refresh_due {
+                        if rotated || infographic_changed || sensor_refresh_due || new_sensor_data {
                             // Snapshot sensor telemetry
                             let (metrics, cpu_temp, gpu_temp, liquid_temp) = {
                                 if let Ok(state) = state_clone.read() {
@@ -263,7 +271,10 @@ impl Application {
                                 let _ = PostMessageW(Some(h), WM_APP_UPDATE, WPARAM(0), LPARAM(0));
                             }
 
-                            last_sensor_render_time = now;
+                            if new_sensor_data || sensor_refresh_due {
+                                last_rendered_sensor_count = current_sensor_count;
+                                last_sensor_render_time = now;
+                            }
                             last_rendered_infographic = active_infographic;
                         }
 

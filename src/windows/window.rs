@@ -517,20 +517,10 @@ impl MainWindow {
         );
 
         // 4. Render LCD display:
-        // Prioritize drawing live preview_buffer produced by worker thread to mirror
-        // the physical Kraken LCD hardware screen (including 5s rotation and sensor updates).
+        // Render directly via Direct2D in lockstep with the telemetry cards
+        // using the exact synchronized snapshot state.
         let metrics = GpuCpuMetrics::new(snapshot.sensors.cpu_usage, snapshot.sensors.gpu_usage);
-        let has_preview = !snapshot.lcd.preview_buffer.is_empty()
-            && snapshot.lcd.preview_buffer.iter().any(|&b| b != 0);
-
-        if has_preview {
-            let _ = self.d2d.draw_bitmap_buffer(
-                &lcd_rect,
-                &snapshot.lcd.preview_buffer,
-                snapshot.lcd.width,
-                snapshot.lcd.height,
-            );
-        } else if let Some(ref rt) = self.d2d.render_target.clone() {
+        if let Some(ref rt) = self.d2d.render_target.clone() {
             if self.lcd_brushes.is_none() {
                 self.lcd_brushes = LcdBrushes::new(rt).ok();
             }
@@ -551,6 +541,15 @@ impl MainWindow {
                     }
                 }
             }
+        } else if !snapshot.lcd.preview_buffer.is_empty()
+            && snapshot.lcd.preview_buffer.iter().any(|&b| b != 0)
+        {
+            let _ = self.d2d.draw_bitmap_buffer(
+                &lcd_rect,
+                &snapshot.lcd.preview_buffer,
+                snapshot.lcd.width,
+                snapshot.lcd.height,
+            );
         }
 
         // Glass reflection / inner bezel highlight rim

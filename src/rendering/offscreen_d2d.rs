@@ -289,7 +289,6 @@ mod tests {
             .to_vec();
         assert_eq!(frame.len(), 240 * 240 * 4);
 
-        // Verify that temperature infographic rendered non-zero pixels
         let non_zero_pixels = frame.chunks_exact(4).filter(|chunk| chunk[0] != 0 || chunk[1] != 0 || chunk[2] != 0).count();
         assert!(non_zero_pixels > 1000, "Temperature infographic should render graphics and text");
 
@@ -316,6 +315,22 @@ mod tests {
         for chunk in frame.chunks_exact(4) {
             assert_eq!(chunk, [0, 0, 0, 255]);
         }
+    }
+
+    #[test]
+    fn test_offscreen_values_change_every_tick() {
+        let mut offscreen = D2DOffscreenLcd::new(240, 240).expect("Failed to create offscreen LCD");
+        let frame1 = offscreen
+            .render_temperature_frame(42.0, 56.0, 32.0)
+            .expect("Failed to render frame 1")
+            .to_vec();
+
+        let frame2 = offscreen
+            .render_temperature_frame(48.0, 60.0, 33.0)
+            .expect("Failed to render frame 2")
+            .to_vec();
+
+        assert_ne!(frame1, frame2, "Frames with different CPU/GPU values must produce distinct rendered frames");
     }
 }
 
